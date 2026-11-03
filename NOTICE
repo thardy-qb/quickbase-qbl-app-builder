@@ -1,0 +1,18 @@
+Quickbase QBL App Builder
+Copyright (c) 2026 Quickbase, Inc.
+
+Licensed under the MIT License. See LICENSE.
+
+Third-party components
+
+This Skill bundles PyYAML under scripts/vendor/ so that it runs without
+installing anything.
+
+PyYAML 6.0.3 -- MIT License
+https://github.com/yaml/pyyaml
+Full text: references/licenses/PYYAML_LICENSE.txt
+
+Modified from the original distribution: the file cyaml.py is removed. It
+binds the optional libyaml C extension, which is not bundled. PyYAML's
+__init__.py already handles the missing import and uses the pure-Python
+parser. All other PyYAML files are unmodified.

@@ -1,0 +1,766 @@
+# EXAMPLE — the example application with one code page and the record
+# button that opens it. The page is the starter page: a temporary
+# token for the acting user, one query for the fields it shows, 429 and
+# Retry-After handling, and textContent rendering. Its header is the one
+# the builder writes on every code page.
+#
+# A synthetic example built from a spec, so it contains no customer data.
+# The page is a DRAFT: review and security-scan it before deploying it.
+
+Version: 0.14
+Resources:
+  $App_Example_Asset_Register_with_a_Code_Page:
+    Type: QB::Application
+    Properties:
+      Name: Example Asset Register with a Code Page
+    Tables:
+      $Table_Locations:
+        Type: QB::Table
+        Properties:
+          Name: Locations
+          TableIconName: Table Header
+          AliasHint: _DBID_LOCATIONS
+          KeyField: !Ref
+            Field: $Field_Record_ID
+          DefaultReportSettings:
+            ActionOnNewFieldAdd: MakeDefault
+            DefaultColorCoding:
+              ColorBy: None
+              Appearance: Pale
+            DefaultFilters:
+              DynamicFields: Default
+              AllowQuickSearch: false
+            DefaultSortOrder:
+              SortOrder: Descending
+              TargetField: !Ref
+                Field: $Field_Record_ID
+          TableHomePageSettings:
+            HomepageView: SameForEveryone
+            RoleViews:
+              Everyone:
+                View: DefaultReport
+        Fields:
+          $Field_Date_Created:
+            Type: QB::Field::DateCreated
+            Id: 1
+            Properties:
+              Label: Date Created
+          $Field_Date_Modified:
+            Type: QB::Field::DateModified
+            Id: 2
+            Properties:
+              Label: Date Modified
+          $Field_Record_ID:
+            Type: QB::Field::RecordID
+            Id: 3
+            Properties:
+              Label: Record ID#
+          $Field_Record_Owner:
+            Type: QB::Field::RecordOwner
+            Id: 4
+            Properties:
+              Label: Record Owner
+          $Field_Last_Modified_By:
+            Type: QB::Field::LastModifiedBy
+            Id: 5
+            Properties:
+              Label: Last Modified By
+          $Field_Location_Name:
+            Type: QB::Field::Text
+            Id: 6
+            Properties:
+              Label: Location Name
+              IsUnique: true
+              AddToAllNewReports: true
+              IsSearchable: true
+          $Field_Site_Manager:
+            Type: QB::Field::User
+            Id: 7
+            Properties:
+              Label: Site Manager
+              AddToAllNewReports: true
+              IsSearchable: true
+          $Field_Asset_Count:
+            Type: QB::Field::Summary
+            Id: 8
+            Properties:
+              Label: Asset Count
+              Summary:
+                ReferenceField: !Ref
+                  Table: $Table_Assets
+                  Field: $Field_Related_Locations
+                Function: Count
+                DisplayType: QB::Field::Number
+                DrillDownReport: Default
+              AddToAllNewReports: true
+          $Field_Assets:
+            Type: QB::Field::ReportLink
+            Id: 9
+            Properties:
+              Label: Assets
+              FieldRelationship:
+                Source: !Ref
+                  Field: $Field_Record_ID
+                Target: !Ref
+                  Table: $Table_Assets
+                  Field: $Field_Related_Locations
+              MatchValuesExactly: true
+        Forms:
+          Properties:
+            RoleDefaults:
+              Everyone:
+                ViewForm: !Ref
+                  Form: $FormV2_Locations
+                EditForm: !Ref
+                  Form: $FormV2_Locations
+                AddForm: !Ref
+                  Form: $FormV2_Locations
+                GridEdit: None
+                Mobile: UseFullSiteForms
+            ReportOverrides: {}
+          Resources:
+            $FormV2_Locations:
+              Type: QB::FormV2
+              Id: 10
+              Properties:
+                Name: Main Form
+              Pages:
+                $FormV2Page_Main_Form:
+                  Type: QB::FormV2::Page
+                  Id: 1
+                  Properties:
+                    Name: Main Form
+                  Sections:
+                    $FormV2Section_Main_Form_1:
+                      Type: QB::FormV2::Section
+                      Properties:
+                        ModesToShowIn:
+                        - Edit
+                        - View
+                        - Create
+                        IsCollapsible: false
+                      Columns:
+                        $FormV2Column_Main_Form_1_1:
+                          Type: QB::FormV2::Column
+                          Properties:
+                            LayoutWidth: 12
+                          Elements:
+                            $FormV2Element_Main_Form_Location_Name:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_Location_Name
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                            $FormV2Element_Main_Form_Site_Manager:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_Site_Manager
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                            $FormV2Element_Main_Form_Asset_Count:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_Asset_Count
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                    $FormV2Section_Main_Form_2:
+                      Type: QB::FormV2::Section
+                      Properties:
+                        ModesToShowIn:
+                        - Edit
+                        - View
+                        - Create
+                        Title: Assets
+                      Columns:
+                        $FormV2Column_Main_Form_2_1:
+                          Type: QB::FormV2::Column
+                          Properties:
+                            LayoutWidth: 12
+                          Elements:
+                            $FormV2Element_Main_Form_Assets:
+                              Type: QB::FormV2::Element::Report
+                              Properties:
+                                LabelMode: Default
+                                LabelOverride:
+                                AllowCreateRecords: true
+                                HideToolbar: false
+                                ShouldOpenInEmbedded: true
+                                SubForm: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                                Report: !Ref
+                                  Table: $Table_Assets
+                                  Report: $Report_Assets_Embedded_for_Locations
+                                ReportLinkField: !Ref
+                                  Field: $Field_Assets
+        Reports:
+          $Report_Locations_All_Locations:
+            Type: QB::Report::Table
+            Id: 1
+            Properties:
+              Name: All Locations
+              ColorCoding:
+                ColorBy: None
+        ReportGroups:
+          $ReportGroup_Locations_Common:
+            Type: QB::ReportGroup
+            Properties:
+              Name: Common
+              Reports:
+              - !Ref
+                Report: $Report_Locations_All_Locations
+        Relationships:
+          $Relationship_Locations_Assets_Parent:
+            Type: QB::Relationship::Parent
+      $Table_Assets:
+        Type: QB::Table
+        Properties:
+          Name: Assets
+          TableIconName: Table Header
+          AliasHint: _DBID_ASSETS
+          KeyField: !Ref
+            Field: $Field_Record_ID
+          DefaultReportSettings:
+            ActionOnNewFieldAdd: MakeDefault
+            DefaultColorCoding:
+              ColorBy: None
+              Appearance: Pale
+            DefaultFilters:
+              DynamicFields: Default
+              AllowQuickSearch: false
+            DefaultSortOrder:
+              SortOrder: Descending
+              TargetField: !Ref
+                Field: $Field_Record_ID
+          TableHomePageSettings:
+            HomepageView: SameForEveryone
+            RoleViews:
+              Everyone:
+                View: DefaultReport
+        Fields:
+          $Field_Date_Created:
+            Type: QB::Field::DateCreated
+            Id: 1
+            Properties:
+              Label: Date Created
+          $Field_Date_Modified:
+            Type: QB::Field::DateModified
+            Id: 2
+            Properties:
+              Label: Date Modified
+          $Field_Record_ID:
+            Type: QB::Field::RecordID
+            Id: 3
+            Properties:
+              Label: Record ID#
+          $Field_Record_Owner:
+            Type: QB::Field::RecordOwner
+            Id: 4
+            Properties:
+              Label: Record Owner
+          $Field_Last_Modified_By:
+            Type: QB::Field::LastModifiedBy
+            Id: 5
+            Properties:
+              Label: Last Modified By
+          $Field_Related_Locations:
+            Type: QB::Field::Reference
+            Id: 6
+            Properties:
+              Label: Related Locations
+              Reference:
+                Relationship: !Ref
+                  Relationship: $Relationship_Locations_Assets
+                Proxy: !Ref
+                  Field: $Field_Locations_Location_Name
+                DisplayAsLinkToParent: true
+                DisplayType: QB::Field::Number
+          $Field_Asset_Tag:
+            Type: QB::Field::Text
+            Id: 7
+            Properties:
+              Label: Asset Tag
+              IsUnique: true
+              AddToAllNewReports: true
+              IsSearchable: true
+          $Field_Description:
+            Type: QB::Field::Text
+            Id: 8
+            Properties:
+              Label: Description
+              AddToAllNewReports: true
+              IsSearchable: true
+          $Field_Replacement_Cost:
+            Type: QB::Field::Currency
+            Id: 9
+            Properties:
+              Label: Replacement Cost
+              DecimalPlaces: 2
+              AddToAllNewReports: true
+          $Field_Condition:
+            Type: QB::Field::TextMultipleChoice
+            Id: 10
+            Properties:
+              Label: Condition
+              InputOptions:
+                InputType: FromList
+                ListChoices:
+                - New
+                - Serviceable
+                - Needs Repair
+                AllowCreateChoices: false
+                ChoiceOrder: Alphabetical
+              AddToAllNewReports: true
+              IsSearchable: true
+          $Field_In_Service:
+            Type: QB::Field::Checkbox
+            Id: 11
+            Properties:
+              Label: In Service
+              AddToAllNewReports: true
+              IsSearchable: true
+          $Field_View_Summary:
+            Type: QB::Field::URL::Formula
+            Id: 12
+            Properties:
+              Label: View Summary
+              Formula: |-
+                URLRoot() & "db/" & Dbid() & "?a=dbpage&pageName=asset-summary.html&rid=" & [Record ID#]
+              DisplayAsButton: true
+              LinkText: View Summary
+              AddToAllNewReports: true
+          $Field_Locations_Location_Name:
+            Type: QB::Field::Lookup
+            Id: 13
+            Properties:
+              Label: Locations - Location Name
+              Lookup:
+                Relationship: !Ref
+                  Relationship: $Relationship_Locations_Assets
+                TargetField: !Ref
+                  Table: $Table_Locations
+                  Field: $Field_Location_Name
+              Comments: Shown by Related Locations in place of the Locations record id.
+              IsSearchable: true
+        Forms:
+          Properties:
+            RoleDefaults:
+              Everyone:
+                ViewForm: !Ref
+                  Form: $FormV2_Assets
+                EditForm: !Ref
+                  Form: $FormV2_Assets
+                AddForm: !Ref
+                  Form: $FormV2_Assets
+                GridEdit: None
+                Mobile: UseFullSiteForms
+            ReportOverrides: {}
+          Resources:
+            $FormV2_Assets:
+              Type: QB::FormV2
+              Id: 10
+              Properties:
+                Name: Main Form
+              Pages:
+                $FormV2Page_Main_Form:
+                  Type: QB::FormV2::Page
+                  Id: 1
+                  Properties:
+                    Name: Main Form
+                  Sections:
+                    $FormV2Section_Main_Form_1:
+                      Type: QB::FormV2::Section
+                      Properties:
+                        ModesToShowIn:
+                        - Edit
+                        - View
+                        - Create
+                        IsCollapsible: false
+                      Columns:
+                        $FormV2Column_Main_Form_1_1:
+                          Type: QB::FormV2::Column
+                          Properties:
+                            LayoutWidth: 12
+                          Elements:
+                            $FormV2Element_Main_Form_Related_Locations:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Create
+                                - Edit
+                                Field: !Ref
+                                  Field: $Field_Related_Locations
+                            $FormV2Element_Main_Form_Locations_Location_Name:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                LabelMode: Custom
+                                ModesToShowIn:
+                                - View
+                                Field: !Ref
+                                  Field: $Field_Locations_Location_Name
+                                LabelOverride: Related Locations
+                            $FormV2Element_Main_Form_Asset_Tag:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_Asset_Tag
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                            $FormV2Element_Main_Form_Description:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_Description
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                            $FormV2Element_Main_Form_Replacement_Cost:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_Replacement_Cost
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                            $FormV2Element_Main_Form_Condition:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_Condition
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                            $FormV2Element_Main_Form_In_Service:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_In_Service
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+                            $FormV2Element_Main_Form_View_Summary:
+                              Type: QB::FormV2::Element::Field
+                              Properties:
+                                Field: !Ref
+                                  Field: $Field_View_Summary
+                                LabelMode: Default
+                                ModesToShowIn:
+                                - Edit
+                                - View
+                                - Create
+        Reports:
+          $Report_Assets_All_Assets:
+            Type: QB::Report::Table
+            Id: 1
+            Properties:
+              Name: All Assets
+              ColorCoding:
+                ColorBy: None
+          $Report_Assets_Embedded_for_Locations:
+            Type: QB::Report::Table
+            Id: 2
+            Properties:
+              Name: Embedded for Locations
+              ColorCoding:
+                ColorBy: None
+              Columns:
+              - !Ref
+                Field: $Field_Asset_Tag
+              - !Ref
+                Field: $Field_Description
+              - !Ref
+                Field: $Field_Replacement_Cost
+              - !Ref
+                Field: $Field_Condition
+              - !Ref
+                Field: $Field_In_Service
+              - !Ref
+                Field: $Field_View_Summary
+              RolePermissions:
+                $Role_Viewer: false
+                $Role_Administrator: false
+        Charts:
+          $Chart_Assets_Cost_by_Condition:
+            Type: QB::Chart::Bar
+            Id: 3
+            Properties:
+              Name: Cost by Condition
+              DataDetails:
+                DataAxis:
+                  Data:
+                  - Source: !Ref
+                      Field: $Field_Replacement_Cost
+                    SummarizeBy: Sum
+                  Label: Cost by Condition
+                  LogScale: false
+                CategoryAxis:
+                  Source: !Ref
+                    Field: $Field_Condition
+                  GroupBy: Value
+                  Label: Cost by Condition
+                  HideEmptyCategories: true
+                DataLabels: Value
+                Sorting:
+                  SortBy: Category
+                  Direction: Ascending
+                GoalLine:
+                  Goal: 0
+                  Label:
+        ReportGroups:
+          $ReportGroup_Assets_Common:
+            Type: QB::ReportGroup
+            Properties:
+              Name: Common
+              Reports:
+              - !Ref
+                Report: $Report_Assets_All_Assets
+              - !Ref
+                Report: $Report_Assets_Embedded_for_Locations
+              - !Ref
+                Chart: $Chart_Assets_Cost_by_Condition
+        Relationships:
+          $Relationship_Locations_Assets:
+            Type: QB::Relationship::Child
+            Properties:
+              Parent: !Ref
+                Table: $Table_Locations
+                Relationship: $Relationship_Locations_Assets_Parent
+    Pages:
+      Properties:
+        RoleDefaults:
+          Everyone: !Ref
+            Dashboard: $Dashboard_Overview
+      Resources:
+        $Page_Home:
+          Type: QB::HomePage
+          Id: 2
+          Properties:
+            Name: Home
+        $Page_asset_summary_html:
+          Type: QB::CodePage
+          Id: 3
+          Properties:
+            Name: asset-summary.html
+            RawCode: |
+              <!--
+                Purpose: Show one asset's tag and condition
+                Native gap: Example only: a form meets this requirement natively. A real code page names the native feature it could not use, and why.
+                Trigger: formula-URL button 'View Summary' on Assets (passes rid, the record's id)
+                Auth pattern: temp token in place of a user token (the acting user's own access, fetched per table from their session; no stored credential, no app token)
+                External libraries: none (vanilla JS)
+                API endpoints used: REST /v1/auth/temporary, REST /v1/records/query
+                URL parameters: rid
+                Data sensitivity: no sensitive data declared
+                Expected volume: 0.5 requests/second combined at peak
+                Review status: DRAFT - review and test this page before deploying it.
+                Review and security-scan this page before deploying it.
+              -->
+              <!DOCTYPE html>
+              <html lang="en">
+              <head>
+              <meta charset="utf-8">
+              <meta name="viewport" content="width=device-width, initial-scale=1">
+              <title>Asset summary</title>
+              <style>
+                body { font-family: system-ui, sans-serif; margin: 1.5rem; color: #1f2933; }
+                dl { display: grid; grid-template-columns: max-content 1fr; gap: .4rem 1rem; }
+                dt { font-weight: 600; }
+                .problem { color: #b42318; }
+              </style>
+              </head>
+              <body>
+              <main>
+                <h1>Asset summary</h1>
+                <p id="status" role="status">Loading...</p>
+                <dl id="details"></dl>
+              </main>
+              <script>
+              (function () {
+                "use strict";
+
+                // The table this page reads, by alias. A create replaces the token with the
+                // table's real id, so the page works in whichever app it lands in.
+                var TABLE_ID = "<!~db~[_DBID_ASSETS]~db~>";
+                // Only the fields this page shows: anything fetched is visible in the
+                // browser whether or not it is rendered.
+                var FIELDS = [
+                  { label: "Asset Tag", id: 7 /*qbl:fid Assets|Asset Tag*/ },
+                  { label: "Condition", id: 10 /*qbl:fid Assets|Condition*/ }
+                ];
+                var REALM = window.location.hostname;
+                var MAX_ATTEMPTS = 4;
+
+                var status = document.getElementById("status");
+                var details = document.getElementById("details");
+
+                function say(message, isProblem) {
+                  status.textContent = message;
+                  status.className = isProblem ? "problem" : "";
+                }
+
+                function recordId() {
+                  var rid = new URLSearchParams(window.location.search).get("rid");
+                  return /^\d+$/.test(rid || "") ? rid : null;
+                }
+
+                function pause(ms) {
+                  return new Promise(function (resolve) { setTimeout(resolve, ms); });
+                }
+
+                // One request, retried with backoff: on 429 after Retry-After, on network
+                // faults and 5xx exponentially, and never more than MAX_ATTEMPTS times.
+                async function request(url, options, attempt) {
+                  attempt = attempt || 1;
+                  var response;
+                  try {
+                    response = await fetch(url, options);
+                  } catch (fault) {
+                    if (attempt >= MAX_ATTEMPTS) { throw fault; }
+                    await pause(Math.pow(2, attempt) * 250);
+                    return request(url, options, attempt + 1);
+                  }
+                  if ((response.status === 429 || response.status >= 500) && attempt < MAX_ATTEMPTS) {
+                    var retryAfter = Number(response.headers.get("Retry-After"));
+                    await pause(retryAfter > 0 ? retryAfter * 1000 : Math.pow(2, attempt) * 250);
+                    return request(url, options, attempt + 1);
+                  }
+                  if (!response.ok) { throw new Error("Request failed with status " + response.status); }
+                  return response.json();
+                }
+
+                // A temporary token for the person who opened the page, for one table. It
+                // can do only what they can, lives about five minutes, and is never stored.
+                async function temporaryToken(tableId) {
+                  var data = await request("https://api.quickbase.com/v1/auth/temporary/" + tableId, {
+                    method: "GET",
+                    credentials: "include",
+                    headers: { "QB-Realm-Hostname": REALM }
+                  });
+                  return data.temporaryAuthorization;
+                }
+
+                async function load() {
+                  var rid = recordId();
+                  if (!rid) { say("This page opens from a record.", true); return; }
+
+                  var token = await temporaryToken(TABLE_ID);
+                  var result = await request("https://api.quickbase.com/v1/records/query", {
+                    method: "POST",
+                    headers: {
+                      "QB-Realm-Hostname": REALM,
+                      "Authorization": "QB-TEMP-TOKEN " + token,
+                      "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                      from: TABLE_ID,
+                      select: FIELDS.map(function (f) { return f.id; }),
+                      where: "{3.EX." + rid + "}"
+                    })
+                  });
+
+                  var record = (result.data || [])[0];
+                  if (!record) { say("That record could not be found.", true); return; }
+
+                  FIELDS.forEach(function (f) {
+                    var term = document.createElement("dt");
+                    var value = document.createElement("dd");
+                    term.textContent = f.label;
+                    var cell = record[String(f.id)];
+                    value.textContent = cell && cell.value != null ? String(cell.value) : "";
+                    details.appendChild(term);
+                    details.appendChild(value);
+                  });
+                  say("");
+                }
+
+                load().catch(function (problem) {
+                  console.error(problem);
+                  say("Unable to load this record. Please refresh and try again.", true);
+                });
+              })();
+              </script>
+              </body>
+              </html>
+        $Dashboard_Overview:
+          Type: QB::Dashboard
+          Properties:
+            Name: Overview
+          Tabs:
+            $DashboardTab_Overview_Main:
+              Type: QB::Dashboard::Tab
+              Properties:
+                Name: Main
+                CanvasVersion: 2
+              Widgets:
+                $DashboardWidget_Overview_1:
+                  Type: QB::Dashboard::Widget::Table
+                  Properties:
+                    X: 0
+                    Y: 0
+                    Width: 6
+                    Height: 12
+                    Title: Locations
+                    ShowTitle: true
+                    Report: !Ref
+                      Table: $Table_Locations
+                      Report: $Report_Locations_All_Locations
+                $DashboardWidget_Overview_2:
+                  Type: QB::Dashboard::Widget::Table
+                  Properties:
+                    X: 6
+                    Y: 0
+                    Width: 6
+                    Height: 12
+                    Title: Assets
+                    ShowTitle: true
+                    Report: !Ref
+                      Table: $Table_Assets
+                      Report: $Report_Assets_All_Assets
+    Roles:
+      $Role_Viewer:
+        Type: QB::Application::Role
+        Properties:
+          Name: Viewer
+          EditApp: false
+          Default: false
+          ManageUsers: false
+          DisableAccess: false
+      $Role_Administrator:
+        Type: QB::Application::Role
+        Properties:
+          Name: Administrator
+          EditApp: false
+          Default: false
+          ManageUsers: false
+          DisableAccess: false
+---
+# Every QBL export the platform writes ends in a document like this one. A
+# loader that reads only the first document refuses the whole file.
+Parameters:
+  ExampleParameter: example value
