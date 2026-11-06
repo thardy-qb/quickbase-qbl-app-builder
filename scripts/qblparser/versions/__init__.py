@@ -14,7 +14,7 @@ VERSION_HANDLERS = {
     "0.15": QBLv015Handler,
 }
 
-DEFAULT_QBL_VERSION = "0.12"
+DEFAULT_QBL_VERSION = "0.15"
 
 
 def normalize_qbl_version(version):
