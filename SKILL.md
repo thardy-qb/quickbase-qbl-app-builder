@@ -11,6 +11,11 @@ A document can pass every offline check and still hang the create with no
 message. The only proof that Quickbase will build a document is to create it, so
 this Skill builds the document, runs offline gates, and then creates it.
 
+**QBL 0.15.** Every generated document declares `Version: 0.15`, the newest
+version Quickbase accepts. Do not lower it: a Scatter3D chart is written with
+0.15's `ZAxis`, which 0.14 rejects, and `CustomAppMessages` and the newer
+pipeline channel steps are dropped below 0.15.
+
 **Creating makes real applications in the user's realm.** Every attempt that may
 have made one is written to a cleanup ledger. The user deletes them in Quickbase
 afterwards; this Skill has no delete call.

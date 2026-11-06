@@ -109,14 +109,14 @@ REMEDIATION: Dict[str, str] = {
     ),
     "VAL002": "Use one of the documented values the message lists.",
     "VAL003": (
-        "Unquote the version: `Version: 0.14`, not `Version: '0.14'`. A quoted "
+        "Unquote the version: `Version: 0.15`, not `Version: '0.15'`. A quoted "
         "version is a string where a number is expected, and the platform "
         "rejects the whole document with `Unparsed: The provided YAML has "
         "syntax errors`, naming no line and no property."
     ),
     "VAL009": (
-        "Change the document `Version` to one the platform accepts - 0.7, "
-        "0.12, 0.14 or 0.15. The platform refuses the whole document for any "
+        "Change the document `Version` to one the platform accepts - 0.15, "
+        "the current version, or 0.7, 0.12 or 0.14. The platform refuses the whole document for any "
         "other version and names nothing else in the response. This Skill can "
         "read more versions than the platform accepts, so an export declaring "
         "an older version parses, but cannot be submitted unchanged. Where "

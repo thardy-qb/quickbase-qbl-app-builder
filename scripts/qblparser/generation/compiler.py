@@ -35,11 +35,12 @@ from qblparser.generation.spec import (
     TableRolePermissionSpec,
     TableSpec,
 )
+from qblparser.qbl_schema.versioned import RENAMED_NESTED as _RENAMED_NESTED
 from qblparser.utils.qbl_tags import QBLTaggedMapping
 from qblparser.generation import code_pages as _code_pages
 from qblparser.generation.tokens import FieldTokenError, resolve_field_tokens
 
-QBL_VERSION = 0.14
+QBL_VERSION = 0.15
 
 BUILTIN_FIELDS = (
     ("Date Created", "DateCreated", 1),
@@ -846,7 +847,9 @@ CREATABLE_CHART_KINDS = SUPPORTED_CHART_KINDS - set(UNCREATABLE_CHART_KINDS)
 NO_SORT_BY_CHARTS = frozenset({"Scatter", "Bubble"})
 
 SECOND_MEASURE_PROPERTY = {
-    "Bubble": "BubbleSize", "VariwideBar": "BarWidth", "Scatter3D": "XAxis",
+    "Bubble": "BubbleSize", "VariwideBar": "BarWidth",
+    "Scatter3D": next(r for r in _RENAMED_NESTED["QB::Chart::Scatter3D"]
+                      if r.path == "DataDetails").name_at(QBL_VERSION),
 }
 
 

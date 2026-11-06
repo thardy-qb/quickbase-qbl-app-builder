@@ -886,7 +886,7 @@ PLATFORM_MESSAGES: Tuple[Diagnosis, ...] = (
         means=("The document's `Version` is one the platform refuses. Accepted: "
                "0.7, 0.12, 0.14, 0.15. Refused: 0.1, 0.8, 0.9, 0.11, 0.13, 0.16 "
                "- so the rule is not \"anything older\"."),
-        next_step=("Set `Version` to 0.14 or 0.15. Moving a document to 0.15 "
+        next_step=("Set `Version` to 0.15, the current version. Moving a document to 0.15 "
                    "renames one thing: a Scatter3D chart's `XAxis` must become "
                    "`ZAxis`."),
         symptom=UNPARSED,
