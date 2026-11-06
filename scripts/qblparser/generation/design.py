@@ -4,7 +4,13 @@ import re
 from collections import defaultdict
 from typing import Any, Dict, List
 
-from qblparser.generation.spec import AppSpec
+from qblparser.generation.spec import AppSpec, TableRolePermissionSpec
+
+FULL_ACCESS = TableRolePermissionSpec(
+    can_add=True, can_delete=True, can_save_common_reports=True,
+    can_edit_field_properties=True, view_records="Always", modify_records="Always")
+
+DEFAULT_ROLE_NAMES = ("viewer", "participant", "administrator")
 
 YEAR = r"(?:19|20)\d{2}"
 YEAR_TOKEN = re.compile(
@@ -117,9 +123,44 @@ def check_design(spec: AppSpec) -> List[Dict[str, Any]]:
                 f"Rename it 'Related {label}', or 'Related <{rel.parent} record "
                 f"name>' if the role adds nothing, and update the forms and "
                 f"reports that name it."))
+
+    findings.extend(_role_findings(spec))
+    return findings
+
+
+def _role_findings(spec: AppSpec) -> List[Dict[str, Any]]:
+    findings: List[Dict[str, Any]] = []
+    filled = DEFAULT_ROLE_NAMES if spec.default_roles else ()
+    for role in spec.roles:
+        key = role.name.casefold()
+        if key in filled or role.disable_access:
+            continue
+        missing = [t.name for t in spec.tables if role.name not in t.role_permissions]
+        if missing:
+            findings.append(_finding(
+                "DSN006", missing[0],
+                f"Role '{role.name}' has no permissions on {len(missing)} table(s): "
+                f"{', '.join(missing)}. A role a table does not list cannot view, "
+                f"add or edit anything in it.",
+                f"Give '{role.name}' a permission on each table it should use - "
+                f"view-only where it should only read - and leave a table out only "
+                f"where the requirements say this role must not see it."))
+
+    for table in spec.tables:
+        for role_name, entry in table.role_permissions.items():
+            if role_name.casefold() == "administrator" and entry != FULL_ACCESS:
+                findings.append(_finding(
+                    "DSN007", table.name,
+                    f"The Administrator role has less than full access to "
+                    f"'{table.name}'. Administrators are expected to view, add, "
+                    f"edit and delete every record in every table.",
+                    "Remove the entry so Administrator keeps full access, or "
+                    "confirm the requirements restrict it - and if they do, put "
+                    "the restriction on a new role rather than on Administrator."))
     return findings
 
 
 __all__ = ["check_design", "DSN_CODES"]
 
-DSN_CODES = ("DSN001", "DSN002", "DSN003", "DSN004", "DSN005")
+DSN_CODES = ("DSN001", "DSN002", "DSN003", "DSN004", "DSN005", "DSN006",
+             "DSN007")

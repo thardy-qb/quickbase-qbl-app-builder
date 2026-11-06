@@ -39,6 +39,36 @@ Resources:
             RoleViews:
               Everyone:
                 View: DefaultReport
+          RolePermissions:
+            $Role_Participant:
+              CanAddRecords: true
+              CanDeleteRecords: false
+              CanSaveCommonReports: false
+              CanEditFieldProperties: false
+              CanViewRecords:
+                When: Always
+              CanModifyRecords:
+                When: CustomRule
+                CustomAccessCriteria: |-
+                  {'4'.EX.'_curuser_'}
+            $Role_Viewer:
+              CanAddRecords: false
+              CanDeleteRecords: false
+              CanSaveCommonReports: false
+              CanEditFieldProperties: false
+              CanViewRecords:
+                When: Always
+              CanModifyRecords:
+                When: Never
+            $Role_Administrator:
+              CanAddRecords: true
+              CanDeleteRecords: true
+              CanSaveCommonReports: true
+              CanEditFieldProperties: true
+              CanViewRecords:
+                When: Always
+              CanModifyRecords:
+                When: Always
         Fields:
           $Field_Date_Created:
             Type: QB::Field::DateCreated
@@ -251,6 +281,36 @@ Resources:
             RoleViews:
               Everyone:
                 View: DefaultReport
+          RolePermissions:
+            $Role_Participant:
+              CanAddRecords: true
+              CanDeleteRecords: false
+              CanSaveCommonReports: false
+              CanEditFieldProperties: false
+              CanViewRecords:
+                When: Always
+              CanModifyRecords:
+                When: CustomRule
+                CustomAccessCriteria: |-
+                  {'4'.EX.'_curuser_'}
+            $Role_Viewer:
+              CanAddRecords: false
+              CanDeleteRecords: false
+              CanSaveCommonReports: false
+              CanEditFieldProperties: false
+              CanViewRecords:
+                When: Always
+              CanModifyRecords:
+                When: Never
+            $Role_Administrator:
+              CanAddRecords: true
+              CanDeleteRecords: true
+              CanSaveCommonReports: true
+              CanEditFieldProperties: true
+              CanViewRecords:
+                When: Always
+              CanModifyRecords:
+                When: Always
         Fields:
           $Field_Date_Created:
             Type: QB::Field::DateCreated
@@ -503,6 +563,7 @@ Resources:
               - !Ref
                 Field: $Field_View_Summary
               RolePermissions:
+                $Role_Participant: false
                 $Role_Viewer: false
                 $Role_Administrator: false
         Charts:
@@ -743,6 +804,15 @@ Resources:
                       Table: $Table_Assets
                       Report: $Report_Assets_All_Assets
     Roles:
+      $Role_Participant:
+        Type: QB::Application::Role
+        Properties:
+          Name: Participant
+          EditApp: false
+          Default: true
+          ManageUsers: false
+          DisableAccess: false
+          Description: Can add records and edit the records they own
       $Role_Viewer:
         Type: QB::Application::Role
         Properties:
