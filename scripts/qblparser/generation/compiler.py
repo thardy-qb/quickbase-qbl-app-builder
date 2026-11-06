@@ -353,17 +353,65 @@ def _forms_properties(table: TableSpec, spec: AppSpec, form_id: str,
 
 PERMISSION_WHEN = ("Always", "Never", "CustomRule")
 
+DEFAULT_ROLES = (
+    RoleSpec(name="Viewer", description="Can view records"),
+    RoleSpec(name="Participant", is_default=True,
+             description="Can add records and edit the records they own"),
+    RoleSpec(name="Administrator", can_edit_app=True, manage_users=True,
+             description="Full access to every table, plus app and user management"),
+)
+
+DEFAULT_ROLE_ACCESS: Dict[str, TableRolePermissionSpec] = {
+    "Viewer": TableRolePermissionSpec(view_records="Always", modify_records="Never"),
+    "Participant": TableRolePermissionSpec(
+        can_add=True, view_records="Always", modify_records="CustomRule",
+        modify_criteria="{'4'.EX.'_curuser_'}"),
+    "Administrator": TableRolePermissionSpec(
+        can_add=True, can_delete=True, can_save_common_reports=True,
+        can_edit_field_properties=True, view_records="Always",
+        modify_records="Always"),
+}
+
+_DEFAULT_ACCESS_BY_NAME = {name.casefold(): access
+                           for name, access in DEFAULT_ROLE_ACCESS.items()}
+
+
+def _with_default_roles(spec: AppSpec) -> AppSpec:
+    if not spec.default_roles:
+        return spec
+    present = {role.name.casefold() for role in spec.roles}
+    missing = [role for role in DEFAULT_ROLES if role.name.casefold() not in present]
+    if not missing:
+        return spec
+    spec = copy.copy(spec)
+    added = [copy.deepcopy(role) for role in missing]
+    if any(role.is_default for role in spec.roles):
+        for role in added:
+            role.is_default = False
+    spec.roles = added + list(spec.roles)
+    return spec
+
 
 def _table_role_permissions(table: TableSpec, spec: AppSpec) -> Dict[str, Any]:
     role_names = {role.name for role in spec.roles}
     permissions: Dict[str, Any] = {}
 
-    for role_name, entry in table.role_permissions.items():
+    for role_name in table.role_permissions:
         if role_name not in role_names:
             raise QBLCompileError(
                 f"table '{table.name}' grants permissions to '{role_name}', which is "
                 f"not a role in this spec"
             )
+
+    entries: Dict[str, TableRolePermissionSpec] = {}
+    for role in spec.roles:
+        entry = table.role_permissions.get(role.name)
+        if entry is None and spec.default_roles:
+            entry = _DEFAULT_ACCESS_BY_NAME.get(role.name.casefold())
+        if entry is not None:
+            entries[role.name] = entry
+
+    for role_name, entry in entries.items():
         for label, when in (("view_records", entry.view_records),
                             ("modify_records", entry.modify_records)):
             if when not in PERMISSION_WHEN:
@@ -3382,6 +3430,7 @@ def compile_app(spec: AppSpec, *, resolve_tokens: bool = True) -> Dict[str, Any]
     for page in spec.pages:
         _check_code_page(page)
 
+    spec = _with_default_roles(spec)
     spec = _with_reference_labels(spec)
     spec = _with_relationship_keys(spec)
     spec = _with_reference_proxies(spec)
@@ -4023,8 +4072,9 @@ def _compile_table(table: TableSpec, spec: AppSpec, minter: _IdMinter,
         compiled["Properties"]["RecordNameSingular"] = table.singular
     if table.plural:
         compiled["Properties"]["RecordNamePlural"] = table.plural
-    if table.role_permissions:
-        compiled["Properties"]["RolePermissions"] = _table_role_permissions(table, spec)
+    role_permissions = _table_role_permissions(table, spec)
+    if role_permissions:
+        compiled["Properties"]["RolePermissions"] = role_permissions
     if table.title_field is not None:
         if table.title_field not in field_kinds:
             raise QBLCompileError(

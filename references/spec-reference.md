@@ -1343,6 +1343,14 @@ and what it may do to the application.
 - **`tables`** — `List[TableSpec]`, default `[]`
 - **`relationships`** — `List[RelationshipSpec]`, default `[]`
 - **`roles`** — `List[RoleSpec]`, default `[]`
+- **`default_roles`** — `bool`, default `True`
+  Keep the three roles Quickbase gives every new application - Viewer,
+  Participant and Administrator - beside whatever `roles` adds. A role in
+  `roles` with one of those names is used as given rather than duplicated;
+  a table that grants one of them nothing explicitly gets its standard
+  access (`compiler.DEFAULT_ROLE_ACCESS`), so Administrator always has
+  full access. Turn off only when the requirements ask for the defaults to
+  be removed.
 - **`description`** — `Optional[str]`, default `None`
 - **`home_page_name`** — `str`, default `'Home'`
 - **`pages`** — `List[PageSpec]`, default `[]`

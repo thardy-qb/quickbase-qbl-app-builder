@@ -493,6 +493,7 @@ class AppSpec:
     tables: List[TableSpec] = field(default_factory=list)
     relationships: List[RelationshipSpec] = field(default_factory=list)
     roles: List[RoleSpec] = field(default_factory=list)
+    default_roles: bool = True
     description: Optional[str] = None
     home_page_name: str = "Home"
     pages: List[PageSpec] = field(default_factory=list)

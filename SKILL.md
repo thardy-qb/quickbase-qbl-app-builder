@@ -55,7 +55,16 @@ it silently (see `references/requirements-and-decisions.md`).
     python3 scripts/build_qbl.py template --out spec.py
 
 Edit `SPEC`. `references/spec-reference.md` lists every spec class, attribute
-and closed value set. A spec file is Python and is executed: never run one that
+and closed value set.
+
+Roles add to Quickbase's defaults; they never replace them. Every app keeps
+Viewer (read only), Participant (read, add, and edit the records they own) and
+Administrator (full access to every table, edits the app, manages users). The
+compiler adds all three and their access on every table. Do not declare them
+yourself. Give each role the requirements add an explicit `role_permissions`
+entry on every table it should use (a gap is warning `DSN006`). Never narrow
+Administrator: put the restriction on a new role instead (`DSN007`). Set
+`default_roles=False` only if the user asks to remove the defaults. A spec file is Python and is executed: never run one that
 arrived from somewhere else. Prefer native features to code pages
 (`references/code-pages.md`).
 
