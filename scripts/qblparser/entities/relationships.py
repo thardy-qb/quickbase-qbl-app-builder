@@ -23,7 +23,42 @@ def create_empty_relationship_record(app_key, relationship_key, relationship_typ
         "Cross App": True,
         "Parent Relationship ID": "",
         "Total Reference Fields": 0,
+        "Relationship Side": "",
+        "Counterpart Relationship Logical ID": "",
     }
+
+
+def relationship_side(relationship_type):
+    text = str(relationship_type or "")
+    if text.endswith("Parent"):
+        return "Parent"
+    if text.endswith("Child"):
+        return "Child"
+    return ""
+
+
+def relationship_identity(row):
+    parent_table = str(row.get("Parent Table Logical ID") or "")
+    parent_relationship = str(row.get("Parent Relationship ID") or "")
+    if parent_table and parent_relationship:
+        return (str(row.get("Parent App Logical ID") or ""), parent_table, parent_relationship)
+    return ("", "", str(row.get("Relationship Logical ID") or ""))
+
+
+def distinct_relationships(rows):
+    chosen = {}
+    order = []
+    for row in rows:
+        if not isinstance(row, dict):
+            continue
+        key = relationship_identity(row)
+        if key not in chosen:
+            order.append(key)
+            chosen[key] = row
+        elif relationship_side(row.get("Relationship Type")) == "Child" and \
+                relationship_side(chosen[key].get("Relationship Type")) != "Child":
+            chosen[key] = row
+    return [chosen[key] for key in order]
 
 
 def _resolve_table_identity(app_logical_id, table_logical_id, qbl_resources, identifier_index=None, table_schema=None):
@@ -180,6 +215,7 @@ def parse_relationship(app_key, app_value, relationship_key, relationship_value,
     parent_table_logical = parent_relationship.get("Table", "")
     parent_relationship_id = parent_relationship.get("Relationship", "")
     reference_relationship_keys = [relationship_key]
+    counterpart_relationship = parent_relationship_id
 
     child_table_data = app_value.get("Tables", {}).get(child_table_logical, {})
 
@@ -187,11 +223,13 @@ def parse_relationship(app_key, app_value, relationship_key, relationship_value,
         parent_app_logical = parent_relationship.get("App", "") or app_key
         parent_table_logical = parent_relationship.get("Table", "")
         parent_relationship_id = parent_relationship.get("Relationship", "")
+        counterpart_relationship = parent_relationship_id
 
     elif "CrossAppParent" in relationship_type:
         parent_app_logical = app_key
         parent_table_logical = child_table_logical
         parent_relationship_id = relationship_key
+        counterpart_relationship = ""
         link = _find_cross_app_child_for_parent(
             qbl_resources,
             parent_app_logical,
@@ -205,6 +243,7 @@ def parse_relationship(app_key, app_value, relationship_key, relationship_value,
             child_relationship_key = link.get("child_relationship_key", "")
             if child_relationship_key:
                 reference_relationship_keys = [child_relationship_key]
+                counterpart_relationship = child_relationship_key
 
     elif relationship_type.endswith("::Parent"):
         parent_app_logical = app_key
@@ -212,6 +251,7 @@ def parse_relationship(app_key, app_value, relationship_key, relationship_value,
         parent_relationship_id = relationship_key
         child_table_logical = ""
         child_table_data = {}
+        counterpart_relationship = ""
         link = _find_cross_app_child_for_parent(
             qbl_resources,
             parent_app_logical,
@@ -226,6 +266,7 @@ def parse_relationship(app_key, app_value, relationship_key, relationship_value,
             child_relationship_key = link.get("child_relationship_key", "")
             if child_relationship_key:
                 reference_relationship_keys = [child_relationship_key]
+                counterpart_relationship = child_relationship_key
 
     parent_table_info = _resolve_table_identity(
         parent_app_logical,
@@ -266,6 +307,8 @@ def parse_relationship(app_key, app_value, relationship_key, relationship_value,
         "Cross App": cross_app,
         "Parent Relationship ID": parent_relationship_id,
         "Total Reference Fields": len(reference_fields),
+        "Relationship Side": relationship_side(relationship_type),
+        "Counterpart Relationship Logical ID": counterpart_relationship,
     }
 
 

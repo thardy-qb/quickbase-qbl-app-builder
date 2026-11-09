@@ -26,6 +26,8 @@ for _path in (VENDOR_DIR, SCRIPT_DIR):
 
 from qblparser import QBLParseError, load_qbl_file, validate_qbl_document  # noqa: E402
 from qblparser.generation import check_behaviour, check_conformance, create_risks  # noqa: E402
+from qblparser.utils.parameters import build_parameter_map, resolve_parameters  # noqa: E402
+from qblparser.utils.qbl_tags import tag_of  # noqa: E402
 from qblparser.utils.qbl_yaml import dump_qbl_yaml  # noqa: E402
 from qblparser.validators.remediation import remediation_for  # noqa: E402
 
@@ -83,7 +85,11 @@ def load_document(path: str) -> Dict[str, Any]:
     if not isinstance(document, Mapping) or "Resources" not in document:
         raise SkillInputError(f"{file_path.name} carries no `Resources` key, so it "
                               "is not a QBL solution")
-    return dict(document)
+    # Returned as loaded, not as `dict(document)`: the loaded document carries
+    # an export's trailing `Parameters` document beside its keys, and a plain
+    # dict drops it - the app's name then resolves to the source app's default,
+    # and a renamed copy is sent without the values it was exported with.
+    return document
 
 
 def document_yaml(document: Mapping[str, Any]) -> str:
@@ -100,18 +106,62 @@ def find_application(document: Mapping[str, Any]) -> Tuple[str, Dict[str, Any]]:
     raise SkillInputError("the document has no QB::Application resource")
 
 
+def _name_parameter(node: Mapping[str, Any]) -> Optional[str]:
+    """The parameter an application's `Name: !Var` names, or None for a literal."""
+    name = (node.get("Properties") or {}).get("Name")
+    if isinstance(name, Mapping) and tag_of(name) == "Var" and "Name" in name:
+        return str(name["Name"])
+    return None
+
+
 def application_name(document: Mapping[str, Any]) -> str:
+    """The application's name, with a `!Var` reference resolved.
+
+    Every export parameterises it - `Name: !Var {Name: App_Name_1}` - and read
+    raw that is a mapping, so a copy's name came out as
+    `{'Name': 'App_Name_1'} (validation copy ...)`. The trailing `Parameters`
+    document, when there is one, wins over the definition's default, as it does
+    on deploy.
+    """
     _, node = find_application(document)
-    return str((node.get("Properties") or {}).get("Name", ""))
+    raw = (node.get("Properties") or {}).get("Name", "")
+    resolved = resolve_parameters(raw, build_parameter_map(document))
+    if isinstance(resolved, (Mapping, list)):
+        raise SkillInputError(
+            f"the application's `Name` is `!Var {_name_parameter(node) or raw}`, and "
+            "no parameter of that name has a value in `ParameterDefinitions` or "
+            "the trailing `Parameters` document")
+    return "" if resolved is None else str(resolved)
 
 
 def renamed_text(document: Mapping[str, Any], new_name: str) -> str:
-    """The document as YAML with the application's name replaced."""
+    """The document as YAML with the application's name replaced.
+
+    A literal name is replaced where it stands. A `!Var` name keeps its
+    reference and the parameter's value changes instead - in
+    `ParameterDefinitions` and in the trailing `Parameters` document, wherever
+    the name has a value - so the copy keeps the shape the platform exported.
+    """
     import copy
 
-    working = copy.deepcopy(dict(document))
+    # `copy.deepcopy(document)`, not of `dict(document)`: the second drops the
+    # trailing `Parameters` document.
+    working = copy.deepcopy(document)
     _, node = find_application(working)
-    node.setdefault("Properties", {})["Name"] = new_name
+    parameter = _name_parameter(node)
+    updated = False
+    if parameter is not None:
+        definitions = working.get("ParameterDefinitions")
+        definition = definitions.get(parameter) if isinstance(definitions, Mapping) else None
+        if isinstance(definition, dict) and "Value" in definition:
+            definition["Value"] = new_name
+            updated = True
+        overrides = getattr(working, "parameter_overrides", None)
+        if isinstance(overrides, dict) and parameter in overrides:
+            overrides[parameter] = new_name
+            updated = True
+    if not updated:
+        node.setdefault("Properties", {})["Name"] = new_name
     return document_yaml(working)
 
 

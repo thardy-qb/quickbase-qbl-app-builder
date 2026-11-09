@@ -385,6 +385,8 @@ class CustomEmailSpec:
     content: str
     trigger: str = "Scheduled"
     schedule: str = "0 9 * * *"
+    record_events: List[str] = _field(default_factory=list)
+    trigger_fields: List[str] = _field(default_factory=list)
     to_fields: List[str] = _field(default_factory=list)
     check_recipient_permissions: bool = True
     send_when_empty: bool = False

@@ -273,7 +273,8 @@ class QBLv07Handler(BaseVersionHandler):
                     )
                 )
                 
-                self._parse_form_rules(app_key, table_name, form_key, form_value, table_key, results)
+                self._parse_form_rules(app_key, table_name, form_key, form_value, table_key, results,
+                                       table_fields=table_value.get("Fields", {}))
                 
                 field_node = form_value.copy()
                 if form_key.startswith("$FormV2_"):
@@ -294,7 +295,8 @@ class QBLv07Handler(BaseVersionHandler):
             except Exception as e:
                 print(f"Error parsing form {form_key}: {e}")
     
-    def _parse_form_rules(self, app_key, table_name, form_key, form_value, table_key, results):
+    def _parse_form_rules(self, app_key, table_name, form_key, form_value, table_key, results,
+                          table_fields=None):
         form_name = form_value["Properties"].get("Name", "Unnamed Form")
         is_form_v2 = form_key.startswith("$FormV2_")
         rules_node = form_value.get("Rules", {} if is_form_v2 else [])
@@ -306,7 +308,8 @@ class QBLv07Handler(BaseVersionHandler):
                         results["rules"].append(
                             PARSING_REGISTRY["rule"](
                                 table_name, form_name, rule_key, rule_value, form_key, table_key,
-                                self.table_schema, form_value, self.identifier_index, app_key
+                                self.table_schema, form_value, self.identifier_index, app_key,
+                                table_fields=table_fields,
                             )
                         )
                     except Exception as e:
@@ -319,7 +322,8 @@ class QBLv07Handler(BaseVersionHandler):
                         results["rules"].append(
                             PARSING_REGISTRY["rule"](
                                 table_name, form_name, f"Rule_{rule_index}", rule_value, form_key, table_key,
-                                self.table_schema, form_value, self.identifier_index, app_key
+                                self.table_schema, form_value, self.identifier_index, app_key,
+                                table_fields=table_fields,
                             )
                         )
                     except Exception as e:

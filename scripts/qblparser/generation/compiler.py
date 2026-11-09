@@ -2803,15 +2803,55 @@ EMAIL_RECIPIENT_FIELD_TYPES = frozenset({
 })
 
 
+EMAIL_RECORD_EVENTS = ("Add", "Modify", "Delete")
+
+
+def _email_send_options(email: Any, where: str,
+                        by_label: Mapping[Any, Tuple[str, Any]]) -> Dict[str, Any]:
+    record_events = list(getattr(email, "record_events", None) or [])
+    trigger_fields = list(getattr(email, "trigger_fields", None) or [])
+    if email.trigger == "Scheduled":
+        if record_events or trigger_fields:
+            raise QBLCompileError(
+                f"{where} is scheduled; record_events and trigger_fields belong to a "
+                f"RecordChange email")
+        return {"TriggerType": "Scheduled", "Schedule": email.schedule}
+    options: Dict[str, Any] = {"TriggerType": email.trigger}
+    if email.trigger != "RecordChange":
+        return options
+    if not record_events:
+        raise QBLCompileError(
+            f"{where} is a RecordChange email with no record_events. Say which of "
+            f"{', '.join(EMAIL_RECORD_EVENTS)} send it: without them the platform "
+            f"stores an email that never sends, and its export cannot be re-imported")
+    unknown = [event for event in record_events if event not in EMAIL_RECORD_EVENTS]
+    if unknown:
+        raise QBLCompileError(
+            f"{where} record_events {unknown} - each must be one of "
+            f"{', '.join(EMAIL_RECORD_EVENTS)}")
+    if len(set(record_events)) != len(record_events):
+        raise QBLCompileError(f"{where} names a record event twice")
+    options["RecordEventTrigger"] = record_events
+    if trigger_fields:
+        refs = []
+        for label in trigger_fields:
+            if label not in by_label:
+                close = difflib.get_close_matches(label, [l for l in by_label if l], n=1)
+                hint = f"; did you mean '{close[0]}'?" if close else ""
+                raise QBLCompileError(f"{where} triggers on '{label}', which is not a "
+                                      f"field of the table{hint}")
+            refs.append(_ref(Field=by_label[label][0]))
+        options["Fields"] = refs
+    return options
+
+
 def _custom_email(email: Any, table: str, fields: Mapping[str, Any]) -> Dict[str, Any]:
     where = f"email '{email.name}' on '{table}'"
     by_label = {(node.get("Properties") or {}).get("Label"): (key, node.get("Type"))
                 for key, node in fields.items()}
     properties: Dict[str, Any] = {
         "Name": email.name,
-        "SendOptions": ({"TriggerType": "Scheduled", "Schedule": email.schedule}
-                        if email.trigger == "Scheduled"
-                        else {"TriggerType": email.trigger}),
+        "SendOptions": _email_send_options(email, where, by_label),
     }
     if email.description:
         properties["Description"] = email.description

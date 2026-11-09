@@ -79,3 +79,42 @@ def resolve_parameters(
 
 def resolve_document(qbl_data: Mapping[str, Any]) -> Any:
     return resolve_parameters(qbl_data, build_parameter_map(qbl_data))
+
+
+def _var_name(node: Any) -> Any:
+    return str(node.get("Name", "")) if _is_var_reference(node) else None
+
+
+def _typed_nodes(node: Any, path: str = ""):
+    if isinstance(node, Mapping):
+        if isinstance(node.get("Type"), str):
+            yield path, node
+        for key, value in node.items():
+            yield from _typed_nodes(value, f"{path}.{key}" if path else str(key))
+    elif isinstance(node, (list, tuple)):
+        for index, value in enumerate(node):
+            yield from _typed_nodes(value, f"{path}[{index}]")
+
+
+def inline_pipeline_names(qbl_data: Mapping[str, Any]):
+    import copy
+
+    working = copy.deepcopy(qbl_data)
+    parameters = build_parameter_map(working)
+    changes = []
+    for path, node in _typed_nodes(working):
+        if node.get("Type") != "QB::Pipeline":
+            continue
+        properties = node.get("Properties")
+        if not isinstance(properties, dict):
+            continue
+        parameter = _var_name(properties.get("Name"))
+        if parameter is None:
+            continue
+        value = resolve_parameters(properties["Name"], parameters)
+        if isinstance(value, (Mapping, list, tuple)) or value is None:
+            changes.append((path, parameter, None))
+            continue
+        properties["Name"] = str(value)
+        changes.append((path, parameter, str(value)))
+    return working, changes
