@@ -521,6 +521,74 @@ class ProbeTests(unittest.TestCase):
         self.assertEqual({e["purpose"] for e in ledger["entries"]}, {"probe"})
 
 
+def _exported_shape(overrides=None):
+    """A compiled app in the shape an export writes it: the name is a `!Var`.
+
+    Every export hoists the application's name into `ParameterDefinitions` and
+    may end in a `Parameters` document that overrides it. Read raw, the name is
+    the mapping `{'Name': 'App_Name_1'}`.
+    """
+    from qblparser.generation import compile_app
+    from qblparser.utils.qbl_tags import QBLTaggedMapping
+
+    document = compile_app(_spec())
+    document["ParameterDefinitions"] = {"App_Name_1": {
+        "Type": "String", "Description": "Parameter for QB::Application-Name",
+        "Value": "Tracker"}}
+    _, app = qb_common.find_application(document)
+    app["Properties"]["Name"] = QBLTaggedMapping({"Name": "App_Name_1"}).with_tag("Var")
+    text = qb_common.document_yaml(document)
+    if overrides:
+        text += "---\nParameters:\n" + "".join(
+            f"  {name}: {value}\n" for name, value in overrides.items())
+    return text
+
+
+class ExportedNameTests(unittest.TestCase):
+    """The app name of an exported document is a `!Var`, not a string."""
+
+    def setUp(self):
+        self._t = tempfile.TemporaryDirectory()
+        self.dir = Path(self._t.name)
+
+    def tearDown(self):
+        self._t.cleanup()
+
+    def load(self, text):
+        path = self.dir / "exported.qbl.yaml"
+        path.write_text(text)
+        return qb_common.load_document(str(path))
+
+    def test_the_name_is_read_through_the_parameter(self):
+        self.assertEqual(qb_common.application_name(self.load(_exported_shape())), "Tracker")
+
+    def test_the_trailing_parameters_document_wins(self):
+        document = self.load(_exported_shape({"App_Name_1": "Tracker-DEV"}))
+        self.assertEqual(qb_common.application_name(document), "Tracker-DEV")
+
+    def test_a_rename_changes_the_parameter_value_and_keeps_the_reference(self):
+        document = self.load(_exported_shape({"App_Name_1": "Tracker-DEV"}))
+        text = qb_common.renamed_text(document, "Tracker (copy)")
+        self.assertNotIn("{'Name'", text)
+        self.assertIn("Name: !Var", text)
+        reloaded = self.load(text)
+        self.assertEqual(qb_common.application_name(reloaded), "Tracker (copy)")
+        self.assertEqual(reloaded["ParameterDefinitions"]["App_Name_1"]["Value"],
+                         "Tracker (copy)")
+        self.assertEqual(reloaded.parameter_overrides, {"App_Name_1": "Tracker (copy)"})
+
+    def test_a_literal_name_is_still_replaced_where_it_stands(self):
+        from qblparser.generation import compile_app
+
+        text = qb_common.renamed_text(compile_app(_spec()), "Tracker (copy)")
+        self.assertEqual(qb_common.application_name(self.load(text)), "Tracker (copy)")
+
+    def test_an_unresolvable_name_is_refused_rather_than_printed(self):
+        text = _exported_shape().replace("App_Name_1:\n", "Other_Name:\n", 1)
+        with self.assertRaises(qb_common.SkillInputError):
+            qb_common.application_name(self.load(text))
+
+
 class CreateCommandTests(unittest.TestCase):
     def setUp(self):
         from qblparser.generation import compile_app
@@ -570,6 +638,24 @@ class CreateCommandTests(unittest.TestCase):
         self.assertEqual(entries[0]["source_sha256"], qb_common.sha256_file(self.document))
         self.assertNotEqual(entries[0]["sent_sha256"], entries[0]["source_sha256"])
         self.assertIn("validation copy", entries[0]["app_name"])
+
+    def test_an_exported_document_is_copied_under_its_real_name(self):
+        self.document.write_text(_exported_shape())
+        code, sent = self.run_create(self.args(intent="edit"), _outcome("CREATED"))
+        self.assertEqual(code, 0)
+        self.assertNotIn("{'Name'", sent["text"])
+        path = self.dir / "sent.qbl.yaml"
+        path.write_text(sent["text"])
+        name = qb_common.application_name(qb_common.load_document(str(path)))
+        self.assertTrue(name.startswith("Tracker (validation copy "), name)
+        entry = cleanup_ledger.load(self.dir / "qbl-cleanup.json")["entries"][0]
+        self.assertEqual(entry["app_name"], name)
+
+    def test_a_name_suffix_on_an_exported_document_uses_the_real_name(self):
+        self.document.write_text(_exported_shape())
+        code, sent = self.run_create(self.args(name_suffix="test"), _outcome("CREATED"))
+        self.assertEqual(code, 0)
+        self.assertIn("Value: Tracker (test)", sent["text"])
 
     def test_errors_and_timeouts_exit_non_zero(self):
         for kind in ("REJECTED", "TIMEOUT"):

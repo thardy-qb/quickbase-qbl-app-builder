@@ -5,6 +5,7 @@ from dataclasses import dataclass, replace
 from typing import Any, Dict, Iterator, List, Mapping, Optional, Sequence, Tuple
 
 from qblparser.entities.fields import FieldExtractor
+from qblparser.utils.qbl_tags import tag_of
 
 from .compiler import (KNOWN_TABLE_ICONS, QUICKBASE_RECORD_SELECTORS,
                        UNCREATABLE_CHART_KINDS)
@@ -727,6 +728,96 @@ def _code_pages_not_create_proven(document: Mapping[str, Any]) -> List[Risk]:
     return out
 
 
+def _emails_without_send_options(document: Mapping[str, Any]) -> List[Risk]:
+    out = []
+    for path, qbl_type, node in _nodes(document):
+        if qbl_type != "QB::CustomEmail" or "SendOptions" in _properties(node):
+            continue
+        out.append(Risk(
+            code="CRT024",
+            severity="error",
+            symptom=UNPARSED,
+            location=path,
+            problem=("A custom email with no `SendOptions`. Quickbase's validation answers "
+                     "`MissingProperty: Missing required property SendOptions`. "
+                     "On an export, the likely cause is the app it came from: "
+                     "an email created as `SendOptions: {TriggerType: "
+                     "RecordChange}` with no `RecordEventTrigger` (CRT026) is "
+                     "stored with no trigger events, never sends, and exports "
+                     "with no `SendOptions` at all."),
+            fix=("On an export, restore the trigger under the email's "
+                 "`Properties`: `SendOptions` with `TriggerType: RecordChange`, "
+                 "`RecordEventTrigger` (some of `Add`, `Modify`, `Delete`) and, "
+                 "if it watches particular fields, `Fields` as `!Ref`s. The "
+                 "export holds none of it - take it from what the email is "
+                 "meant to do, or fix the email in the source app (pick its "
+                 "trigger events in the email's settings) and export again. "
+                 "Check its `Conditions` too: the trigger-less email lost "
+                 "them on export, while an email with its trigger complete "
+                 "kept them. For a new document, write the trigger in full in "
+                 "the first place (CRT026)."),
+        ))
+    return out
+
+
+def _record_change_emails_without_events(document: Mapping[str, Any]) -> List[Risk]:
+    out = []
+    for path, qbl_type, node in _nodes(document):
+        if qbl_type != "QB::CustomEmail":
+            continue
+        options = _properties(node).get("SendOptions")
+        if not isinstance(options, Mapping) or options.get("TriggerType") != "RecordChange":
+            continue
+        if options.get("RecordEventTrigger"):
+            continue
+        out.append(Risk(
+            code="CRT026",
+            severity="error",
+            symptom=SILENT,
+            location=path,
+            problem=("A `RecordChange` email with no `RecordEventTrigger`. The "
+                     "create accepts it and stores an email with no trigger "
+                     "events: it never sends, nothing reports it, and the app's "
+                     "export then leaves `SendOptions` out entirely, so a copy "
+                     "made from that export is refused (CRT024)."),
+            fix=("Add `RecordEventTrigger` under `SendOptions`, listing the "
+                 "events that send it from `Add`, `Modify` and `Delete`, and "
+                 "`Fields` (`!Ref`s) if it should send only when particular "
+                 "fields change. In a spec: `record_events` and "
+                 "`trigger_fields` on the email."),
+        ))
+    return out
+
+
+def _pipeline_names_from_parameters(document: Mapping[str, Any]) -> List[Risk]:
+    out = []
+    for path, qbl_type, node in _nodes(document):
+        if qbl_type != "QB::Pipeline":
+            continue
+        name = _properties(node).get("Name")
+        if not (isinstance(name, Mapping) and tag_of(name) == "Var"):
+            continue
+        parameter = name.get("Name", "")
+        out.append(Risk(
+            code="CRT025",
+            severity="error",
+            symptom=UNPARSED,
+            location=path,
+            problem=(f"This pipeline's `Name` is `!Var {parameter}`, as every "
+                     "export writes it. Quickbase's validation answers **HTTP 500** - no "
+                     "findings, no message - whenever any pipeline in the "
+                     "document is named this way, so the platform gate cannot "
+                     "speak for the document at all. A 500 here is not an "
+                     "outage."),
+            fix=("Write the pipeline's name as a literal string: replace the "
+                 f"`!Var` with the `Value` of `{parameter}` in "
+                 "`ParameterDefinitions` (or the trailing `Parameters` "
+                 "document, which wins). Only the pipeline's `Name` needs it; "
+                 "the definition and every other `!Var` can stay."),
+        ))
+    return out
+
+
 CHECKS = (
     _quoted_version,
     _uncreatable_charts,
@@ -751,6 +842,9 @@ CHECKS = (
     _thin_nodes,
     _forward_formula_references,
     _code_pages_not_create_proven,
+    _emails_without_send_options,
+    _pipeline_names_from_parameters,
+    _record_change_emails_without_events,
 )
 
 
@@ -803,6 +897,16 @@ PLATFORM_MESSAGES: Tuple[Diagnosis, ...] = (
                    "(CRT005) and a chart's `DataDetails.DataAxis.Data`. Then "
                    "narrow the document down by halves - there is no location "
                    "in the response to work from."),
+        symptom=UNPARSED,
+    ),
+    Diagnosis(
+        pattern=r"\bHTTP 500\b|\b500 Internal Server Error\b|status(?: code)?:? 500\b",
+        means=("Quickbase's validation answered HTTP 500 with no findings. On a "
+               "document exported from Quickbase the known cause is a pipeline "
+               "whose `Name` is `!Var` (CRT025): any one of them is enough, and "
+               "the same document with literal pipeline names checks cleanly."),
+        next_step=("Write every pipeline's `Name` as a literal (CRT025) and "
+                   "run the check again before treating it as an outage."),
         symptom=UNPARSED,
     ),
     Diagnosis(

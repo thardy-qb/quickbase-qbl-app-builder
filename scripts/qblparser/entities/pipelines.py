@@ -107,6 +107,218 @@ def _channel_accounts(qbl_data):
     return accounts
 
 
+_HTTP_INPUT_KEYS = ("Method", "Url", "Body", "Content_Type")
+
+_MAX_TARGET_HOPS = 10
+
+
+def iter_steps_with_depth(steps, depth=0):
+    if not isinstance(steps, list):
+        return
+    for step in steps:
+        if not isinstance(step, dict):
+            continue
+        yield step, depth
+        for nested_key in NESTED_STEP_KEYS:
+            yield from iter_steps_with_depth(step.get(nested_key), depth + 1)
+
+
+def step_target_id(step):
+    target = step_node(step, "Target")
+    if not isinstance(target, dict) or target.get("Type") != "step-reference":
+        return ""
+    step_id = target.get("StepId")
+    return "" if step_id is None else str(step_id)
+
+
+def own_step_tables(step):
+    tables = []
+    for _context, source in iter_data_sources(step_node(step, "InputsMeta")):
+        table_logical_id = normalize_table_reference(source.get("Table"))
+        if table_logical_id and table_logical_id not in tables:
+            tables.append(table_logical_id)
+    return tables
+
+
+def step_tables_by_id(pipeline_value):
+    tables = {}
+    for step in iter_steps(pipeline_value.get("Steps", []) if isinstance(pipeline_value, dict) else []):
+        step_id = PropertyExtractor(step).get("Id", "")
+        if step_id not in ("", None):
+            tables[str(step_id)] = (own_step_tables(step), step_target_id(step))
+    return tables
+
+
+def resolved_step_tables(step, tables_by_id):
+    own = own_step_tables(step)
+    if own:
+        return own, ""
+    target = step_target_id(step)
+    first_target = target
+    seen = set()
+    while target and target not in seen and len(seen) < _MAX_TARGET_HOPS:
+        seen.add(target)
+        tables, next_target = (tables_by_id or {}).get(target) or ([], "")
+        if tables:
+            return list(tables), first_target
+        target = next_target
+    return [], first_target
+
+
+def _render_value(value):
+    if isinstance(value, bool):
+        return "true" if value else "false"
+    if value is None:
+        return "null"
+    if isinstance(value, (int, float)):
+        return str(value)
+    if isinstance(value, str):
+        text = " ".join(value.split())
+        return f'"{text}"'
+    return json.dumps(value, sort_keys=True, default=str)
+
+
+def render_filter_expression(filters):
+    if not filters:
+        return ""
+    if isinstance(filters, list):
+        expression = filters
+    elif isinstance(filters, dict):
+        if filters.get("Type") == "relational-expression":
+            expression = [filters]
+        else:
+            expression = filters.get("Expression", [])
+    else:
+        return str(filters)
+    if not isinstance(expression, list):
+        return ""
+
+    stack = []
+    for term in expression:
+        if not isinstance(term, dict):
+            continue
+        term_type = term.get("Type", "")
+        if term_type == "logical-operator":
+            operator = str(term.get("Operator", "AND")).upper()
+            if len(stack) >= 2:
+                right = stack.pop()
+                left = stack.pop()
+                stack.append(f"({left} {operator} {right})")
+            continue
+        if term_type == "composite-expression":
+            nested = render_filter_expression(term)
+            if nested:
+                stack.append(f"({nested})")
+            continue
+        field = term.get("Field", "?")
+        if isinstance(field, dict):
+            field = field.get("Field", "?")
+        operator = term.get("Operator", "?")
+        if "Value" in term:
+            stack.append(f"{field} {operator} {_render_value(term.get('Value'))}")
+        else:
+            stack.append(f"{field} {operator}")
+
+    rendered = " AND ".join(stack)
+    if rendered.startswith("(") and rendered.endswith(")") and len(stack) == 1:
+        depth = 0
+        for index, char in enumerate(rendered):
+            depth += 1 if char == "(" else -1 if char == ")" else 0
+            if depth == 0 and index < len(rendered) - 1:
+                break
+        else:
+            rendered = rendered[1:-1]
+    return rendered
+
+
+def input_mappings(step):
+    inputs = step_node(step, "Inputs")
+    if not isinstance(inputs, dict):
+        return []
+    mappings = []
+    for key, value in inputs.items():
+        if key in _HTTP_INPUT_KEYS:
+            continue
+        if isinstance(value, str):
+            text = value.strip()
+        else:
+            text = json.dumps(value, sort_keys=True, default=str)
+        mappings.append((str(key), text))
+    return mappings
+
+
+def render_input_mappings(step):
+    return "; ".join(f"{key} = {value}" for key, value in input_mappings(step))
+
+
+def trigger_field_ids(step):
+    fields = []
+    for _context, source in iter_data_sources(step_node(step, "InputsMeta")):
+        if source.get("Name") != "trigger_fields":
+            continue
+        for field_ref in source.get("Fields", []) or []:
+            if isinstance(field_ref, dict):
+                field = field_ref.get("Field", "")
+                if isinstance(field, str) and field and field not in fields:
+                    fields.append(field)
+    return fields
+
+
+def _trigger_on_all_fields(step):
+    inputs_meta = step_node(step, "InputsMeta")
+    if not isinstance(inputs_meta, dict):
+        return ""
+    for value in inputs_meta.values():
+        if isinstance(value, dict):
+            flag = (value.get("Properties") or {}).get("Trigger_On_All_Fields")
+            if flag is not None:
+                return "Yes" if flag else "No"
+    return ""
+
+
+def field_slug(label):
+    return re.sub(r"[^a-z0-9]+", "_", str(label or "").casefold()).strip("_")
+
+
+def _table_field_slugs(qbl_data, table_logical_id):
+    slugs = {}
+    if not isinstance(qbl_data, dict) or not table_logical_id:
+        return slugs
+    for app_key, app_value in (qbl_data.get("Resources", {}) or {}).items():
+        if not isinstance(app_value, dict) or not app_key.startswith("$App_"):
+            continue
+        table = (app_value.get("Tables", {}) or {}).get(table_logical_id)
+        if not isinstance(table, dict):
+            continue
+        for field_key, field_value in (table.get("Fields", {}) or {}).items():
+            if not isinstance(field_value, dict):
+                continue
+            props = PropertyExtractor(field_value)
+            slug = field_slug(props.label(""))
+            if slug:
+                slugs.setdefault(slug, field_key)
+            if str(props.id("")) == "3":
+                slugs["id"] = field_key
+        break
+    return slugs
+
+
+def _filter_field_names(filters):
+    names = []
+    if isinstance(filters, dict):
+        if filters.get("Type") == "relational-expression":
+            field = filters.get("Field")
+            if isinstance(field, str):
+                names.append(field)
+        for value in filters.values():
+            if isinstance(value, (dict, list)):
+                names.extend(_filter_field_names(value))
+    elif isinstance(filters, list):
+        for item in filters:
+            names.extend(_filter_field_names(item))
+    return names
+
+
 def parse_pipeline(pipeline_key, pipeline_value, identifier_index=None, qbl_data=None):
     props = PropertyExtractor(pipeline_value)
     
@@ -142,7 +354,25 @@ def parse_pipeline(pipeline_key, pipeline_value, identifier_index=None, qbl_data
             action_count += 1
     
     action_summary = f"{action_count} actions" if action_count > 0 else "No actions"
-    
+
+    schedule = props.get("Crontab", "") or ""
+    timezone = props.get("CrontabTimezone", "") or ""
+    trigger = ""
+    if schedule:
+        trigger = f"Schedule {schedule}" + (f" ({timezone})" if timezone else "")
+    else:
+        table_names = _build_table_name_map(qbl_data)
+        for step in all_steps:
+            step_props = PropertyExtractor(step)
+            if step_props.get("SubType", "") != "trigger":
+                continue
+            channel = step_props.get("Channel", {})
+            selector = channel.get("Selector", "") if isinstance(channel, dict) else ""
+            tables = [table_names.get(t, t) for t in own_step_tables(step)]
+            trigger = " ".join(part for part in (selector, ", ".join(tables)) if part)
+            trigger = trigger or step_props.get("Name", "")
+            break
+
     return {
         "App Logical ID": _pipeline_app_logical_id(pipeline_value, qbl_data),
         "Pipeline Logical ID": pipeline_key,
@@ -152,6 +382,10 @@ def parse_pipeline(pipeline_key, pipeline_value, identifier_index=None, qbl_data
         "Total Steps": step_count,
         "Actions": action_summary,
         "Accounts": accounts_summary,
+        "Description": props.description("") or "",
+        "Trigger": trigger,
+        "Schedule": schedule,
+        "Schedule Timezone": timezone,
     }
 
 def parse_pipeline_steps(pipeline_key, pipeline_value, identifier_index=None, qbl_data=None):
@@ -168,7 +402,11 @@ def parse_pipeline_steps(pipeline_key, pipeline_value, identifier_index=None, qb
         "loop": "loop"
     }
 
-    for step in iter_steps(pipeline_value.get("Steps", [])):
+    tables_by_id = step_tables_by_id(pipeline_value)
+    table_names = _build_table_name_map(qbl_data)
+    field_labels = _build_field_label_map(qbl_data)
+
+    for step, depth in iter_steps_with_depth(pipeline_value.get("Steps", [])):
         step_props = PropertyExtractor(step)
 
         step_id = step_props.get("Id", "")
@@ -224,6 +462,16 @@ def parse_pipeline_steps(pipeline_key, pipeline_value, identifier_index=None, qb
             if table_logical_id:
                 referenced_tables.append(table_logical_id)
 
+        resolved_tables, target_step = resolved_step_tables(step, tables_by_id)
+        target_step = step_target_id(step) or target_step
+        if not referenced_tables and resolved_tables:
+            referenced_tables = list(resolved_tables)
+        table_source = "Target step" if (resolved_tables and not own_step_tables(step)) else (
+            "Step data source" if resolved_tables else "")
+
+        filters = step_node(step, "Filters")
+        trigger_fields = trigger_field_ids(step)
+
         step_records.append({
             "App Logical ID": pipeline_app,
             "Pipeline Logical ID": pipeline_key,
@@ -245,6 +493,15 @@ def parse_pipeline_steps(pipeline_key, pipeline_value, identifier_index=None, qb
             "Referenced Tables": ", ".join(referenced_tables) if referenced_tables else "",
             "Field Count": len(referenced_fields),
             "Table Count": len(referenced_tables),
+            "Step Depth": depth,
+            "Target Step ID": target_step,
+            "Table Logical ID": resolved_tables[0] if resolved_tables else "",
+            "Table Name": ", ".join(table_names.get(t, t) for t in resolved_tables),
+            "Table Source": table_source,
+            "Filters": render_filter_expression(filters),
+            "Input Mappings": render_input_mappings(step),
+            "Trigger Fields": ", ".join(field_labels.get(f, f) for f in trigger_fields),
+            "Trigger On All Fields": _trigger_on_all_fields(step),
         })
 
     return step_records
@@ -281,6 +538,7 @@ def parse_pipeline_table_matrix(pipeline_key, pipeline_value, identifier_index=N
     table_name_map = _build_table_name_map(qbl_data)
     
     table_matrix = []
+    tables_by_id = step_tables_by_id(pipeline_value)
     
     for step in iter_steps(pipeline_value.get("Steps", [])):
         step_props = PropertyExtractor(step)
@@ -288,13 +546,34 @@ def parse_pipeline_table_matrix(pipeline_key, pipeline_value, identifier_index=N
         step_id = step_props.get("Id", "")
         step_name = step_props.get("Name", "Unnamed Step")
         
-        table_matrix.extend(
-            _extract_native_step_references(
-                pipeline_key, pipeline_name, step_id, step_name,
-                step_props, identifier_index, table_schema, table_to_app_map, step,
-                table_name_map
-            )
+        native = _extract_native_step_references(
+            pipeline_key, pipeline_name, step_id, step_name,
+            step_props, identifier_index, table_schema, table_to_app_map, step,
+            table_name_map
         )
+        table_matrix.extend(native)
+
+        if not native and step_props.get("Type", "") != "loop":
+            tables, target = resolved_step_tables(step, tables_by_id)
+            for table_logical_id in tables:
+                table_info = TableResolver.resolve_complete_info(
+                    table_logical_id=table_logical_id,
+                    identifier_index=identifier_index,
+                    table_schema=table_schema
+                )
+                table_matrix.append({
+                    "App Logical ID": _resolve_app_logical_id(table_info, table_to_app_map),
+                    "Pipeline Logical ID": pipeline_key,
+                    "Pipeline Name": pipeline_name,
+                    "Step ID": step_id,
+                    "Step Name": step_name,
+                    "Table Logical ID": table_info["table_logical_id"],
+                    "Table ID": table_info["table_id"],
+                    "Table Name": table_info["table_name"] or table_name_map.get(
+                        table_logical_id, ""),
+                    "Reference Type": "Target Step",
+                    "Reference Context": f"Target.StepId={target} (the table step {target} works against)",
+                })
         
         table_matrix.extend(
             _extract_http_request_references(
@@ -565,12 +844,16 @@ def parse_field_to_pipeline_matrix(qbl_data, identifier_index=None, table_schema
             pipeline_props = PropertyExtractor(resource_value)
             pipeline_name = pipeline_props.name("Unnamed Pipeline")
             
+            tables_by_id = step_tables_by_id(resource_value)
+
             for step in iter_steps(resource_value.get("Steps", [])):
                 step_props = PropertyExtractor(step)
                 step_id = step_props.get("Id", "")
                 step_name = step_props.get("Name", "Unnamed Step")
                 
                 field_references = _extract_field_references_from_step(step_props, step)
+                field_references.extend(_slug_field_references(
+                    step, step_props, tables_by_id, qbl_data, field_references))
                 
                 for field_ref in field_references:
                     field_logical_id = field_ref["field_logical_id"]
@@ -773,6 +1056,58 @@ def _extract_field_refs_from_property(prop_value, prop_name):
         })
     
     return field_references
+
+
+def _slug_field_references(step, step_props, tables_by_id, qbl_data, existing):
+    if step_props.get("Type", "") == "loop":
+        return []
+    tables, _target = resolved_step_tables(step, tables_by_id)
+    if not tables:
+        return []
+    table_logical_id = tables[0]
+    slugs = _table_field_slugs(qbl_data, table_logical_id)
+    if not slugs:
+        return []
+    seen = {(ref.get("table_logical_id", ""), ref.get("field_logical_id", "")) for ref in existing}
+    seen |= {("", ref.get("field_logical_id", "")) for ref in existing}
+    added = []
+
+    def add(slug, context):
+        field_logical_id = slugs.get(field_slug(slug))
+        if not field_logical_id:
+            return
+        if (table_logical_id, field_logical_id) in seen or ("", field_logical_id) in seen:
+            return
+        seen.add((table_logical_id, field_logical_id))
+        added.append({
+            "field_logical_id": field_logical_id,
+            "table_logical_id": table_logical_id,
+            "context": context,
+        })
+
+    for name in _filter_field_names(step_node(step, "Filters")):
+        add(name, f"Filters.{name} (step filter condition)")
+    for key, _value in input_mappings(step):
+        add(key, f"Inputs.{key} (value the step writes)")
+    return added
+
+
+def _build_field_label_map(qbl_data):
+    labels = {}
+    if not isinstance(qbl_data, dict):
+        return labels
+    for app_key, app_value in (qbl_data.get("Resources", {}) or {}).items():
+        if not isinstance(app_value, dict) or not app_key.startswith("$App_"):
+            continue
+        for table_value in (app_value.get("Tables", {}) or {}).values():
+            if not isinstance(table_value, dict):
+                continue
+            for field_key, field_value in (table_value.get("Fields", {}) or {}).items():
+                if isinstance(field_value, dict):
+                    label = PropertyExtractor(field_value).label("")
+                    if label:
+                        labels.setdefault(field_key, label)
+    return labels
 
 
 def _build_table_to_app_map(qbl_data):

@@ -1,6 +1,7 @@
 from qblparser.analysis.base_analyzer import BaseAnalyzer
 from qblparser.utils.helpers import FieldExtractor
 from qblparser.utils.property_extractor import PropertyExtractor
+from qblparser.entities.forms.metadata import RULE_FIELD_KEYS, iter_rule_conditions
 import re
 
 class RuleAnalyzer(BaseAnalyzer):
@@ -65,21 +66,33 @@ class RuleAnalyzer(BaseAnalyzer):
         fields_found = 0
 
         conditions = list(rule_value.get("When") or []) + list(rule_value.get("If") or [])
-        for condition in conditions:
-            if isinstance(condition, dict):
-                field_ref = condition.get("Properties", {}).get("Field")
-                field_ref = FieldExtractor.from_reference(field_ref)
-                if self.tracker.mark_used_if_exists(field_usage, field_ref, "Used in Form Rules"):
-                    fields_found += 1
-                
-                formula = condition.get("Properties", {}).get("Formula", "")
-                if formula:
-                    referenced_fields = self._extract_fields_from_formula_with_lookup(formula, field_label_to_logical_id)
-                    for ref_field in referenced_fields:
-                        if self.tracker.mark_used_if_exists(field_usage, ref_field, "Used in Form Rules"):
-                            fields_found += 1
+        for condition in iter_rule_conditions(conditions):
+            properties = condition.get("Properties", {})
+            if not isinstance(properties, dict):
+                continue
+            fields_found += self._mark_field_keys(properties, field_usage)
+
+            formula = properties.get("Formula", "")
+            if formula:
+                referenced_fields = self._extract_fields_from_formula_with_lookup(formula, field_label_to_logical_id)
+                for ref_field in referenced_fields:
+                    if self.tracker.mark_used_if_exists(field_usage, ref_field, "Used in Form Rules"):
+                        fields_found += 1
         
         return fields_found
+
+    def _mark_field_keys(self, properties, field_usage):
+        found = 0
+        for key in RULE_FIELD_KEYS:
+            field_ref = FieldExtractor.from_reference(properties.get(key))
+            if self.tracker.mark_used_if_exists(field_usage, field_ref, "Used in Form Rules"):
+                found += 1
+        value = properties.get("Value")
+        if isinstance(value, dict):
+            field_ref = FieldExtractor.from_reference(value)
+            if self.tracker.mark_used_if_exists(field_usage, field_ref, "Used in Form Rules"):
+                found += 1
+        return found
     
     def _analyze_rule_actions(self, rule_value, field_usage, field_label_to_logical_id):
         fields_found = 0
@@ -87,12 +100,12 @@ class RuleAnalyzer(BaseAnalyzer):
         actions = rule_value.get("Actions", [])
         for action in actions:
             if isinstance(action, dict):
-                target = action.get("Properties", {}).get("Target")
-                field_ref = FieldExtractor.from_reference(target)
-                if self.tracker.mark_used_if_exists(field_usage, field_ref, "Used in Form Rules"):
-                    fields_found += 1
+                properties = action.get("Properties", {})
+                if not isinstance(properties, dict):
+                    continue
+                fields_found += self._mark_field_keys(properties, field_usage)
                 
-                value = action.get("Properties", {}).get("Value", "")
+                value = properties.get("Value", "")
                 if isinstance(value, str) and value:
                     referenced_fields = self._extract_fields_from_formula_with_lookup(value, field_label_to_logical_id)
                     for ref_field in referenced_fields:

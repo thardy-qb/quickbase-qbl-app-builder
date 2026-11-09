@@ -1098,8 +1098,18 @@ the token is resolved to the field's id on this table.
 - **`subject`** — `str`, default required
 - **`content`** — `str`, default required
 - **`trigger`** — `str`, default `'Scheduled'`
-  `Scheduled` needs a cron `schedule`; `RecordChange` needs neither.
+  `Scheduled` needs a cron `schedule`; `RecordChange` needs `record_events`.
 - **`schedule`** — `str`, default `'0 9 * * *'`
+- **`record_events`** — `List[str]`, default `[]`
+  For a `RecordChange` email, required: which record events send it, from
+  `Add`, `Modify` and `Delete`. There is no default - the platform accepts a
+  record-change email with none, stores an email that never sends, and
+  exports it with no `SendOptions` at all, so the export cannot be
+  re-imported. Refused on a scheduled email.
+- **`trigger_fields`** — `List[str]`, default `[]`
+  For a `RecordChange` email: send only when one of these fields changes,
+  by label on this table. Empty means any change. Refused on a scheduled
+  email.
 - **`to_fields`** — `List[str]`, default `[]`
   Recipient fields on this table, by label.
 - **`check_recipient_permissions`** — `bool`, default `True`

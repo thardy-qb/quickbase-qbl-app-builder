@@ -89,8 +89,8 @@ PLATFORM_PERMITS["QB::Form::Element::Section"] = {
 EXPORT_OMITS: Dict[str, Dict[str, str]] = {
     "QB::CustomEmail": {
         "SendOptions":
-            "dropped on export from an email created with TriggerType "
-            "RecordChange; the platform refuses the node without it",
+            "dropped on export from a RecordChange email that has no trigger "
+            "events; the platform refuses the node without it",
     },
 }
 

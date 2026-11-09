@@ -68,7 +68,11 @@ REMEDIATION: Dict[str, str] = {
         "If you are checking an export, nothing is wrong with the app - "
         "Quickbase's own export leaves this property out. If you are going to "
         "deploy this document, add the property back first: the platform "
-        "refuses the node without it."
+        "refuses the node without it. On a custom email the likely cause is "
+        "an email in the source app with no trigger events: restore "
+        "`SendOptions` with `TriggerType`, `RecordEventTrigger` and any "
+        "`Fields`, or set the trigger events on the email in the source app and "
+        "export again."
     ),
     "SCH999": (
         "Read the message, which is authoritative. The finding could not be "
