@@ -34,7 +34,8 @@ def parse_page_metadata(page_key, page_value, identifier_index=None, app_key="",
             raw_code = ""
         base_metadata.update({
             "Has Code": bool(raw_code),
-            "Code Length": int(len(raw_code))
+            "Code Length": int(len(raw_code)),
+            "Page Content": raw_code,
         })
     elif page_type == 'QB::RichTextPage':
         raw_text = props.safe_get("RawText", default="")
@@ -42,7 +43,8 @@ def parse_page_metadata(page_key, page_value, identifier_index=None, app_key="",
             raw_text = ""
         base_metadata.update({
             "Has Text": bool(raw_text),
-            "Text Length": int(len(raw_text))
+            "Text Length": int(len(raw_text)),
+            "Page Content": raw_text,
         })
     return base_metadata
 
