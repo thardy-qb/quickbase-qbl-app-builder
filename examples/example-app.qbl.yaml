@@ -4,7 +4,7 @@
 # It passes every check the builder runs, and is safe to deploy to a
 # scratch realm.
 
-Version: 0.14
+Version: 0.15
 Resources:
   $App_Example_Asset_Register:
     Type: QB::Application

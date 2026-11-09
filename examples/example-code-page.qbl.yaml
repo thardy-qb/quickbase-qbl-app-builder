@@ -7,7 +7,7 @@
 # A synthetic example built from a spec, so it contains no customer data.
 # The page is a DRAFT: review and security-scan it before deploying it.
 
-Version: 0.14
+Version: 0.15
 Resources:
   $App_Example_Asset_Register_with_a_Code_Page:
     Type: QB::Application
