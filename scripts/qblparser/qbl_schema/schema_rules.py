@@ -79,3 +79,21 @@ PLATFORM_PERMITS: Dict[str, Dict[str, str]] = {
             "one of Default, Hidden or Visible",
     },
 }
+
+PLATFORM_PERMITS["QB::Form::Element::Section"] = {
+    "NonFieldElementID":
+        "an integer; exports write 0",
+}
+
+
+EXPORT_OMITS: Dict[str, Dict[str, str]] = {
+    "QB::CustomEmail": {
+        "SendOptions":
+            "dropped on export from an email created with TriggerType "
+            "RecordChange; the platform refuses the node without it",
+    },
+}
+
+
+def export_omits(qbl_type: str, prop: str) -> bool:
+    return prop in EXPORT_OMITS.get(qbl_type, {})

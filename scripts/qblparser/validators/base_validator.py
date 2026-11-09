@@ -1,5 +1,6 @@
 from qblparser.qbl_schema import QBL_SCHEMA
 from qblparser.qbl_schema.platform_requirements import near_miss_for
+from qblparser.qbl_schema.schema_rules import export_omits
 
 
 def schema_issue(code, logical_id, path, qbl_type, problem, severity="error"):
@@ -176,6 +177,14 @@ def validate_generic(resource, context):
 
     for req_field in schema.get("required", []):
         if req_field not in properties:
+            if export_omits(r_type, req_field):
+                issues.append(schema_issue(
+                    "SCH012", context["LogicalID"], context.get("Path", ""), r_type,
+                    f"Missing required property '{req_field}', which Quickbase's "
+                    f"own export is known to leave out",
+                    severity="warning",
+                ))
+                continue
             issues.append(schema_issue(
                 "SCH003", context["LogicalID"], context.get("Path", ""), r_type,
                 f"Missing required property '{req_field}'",

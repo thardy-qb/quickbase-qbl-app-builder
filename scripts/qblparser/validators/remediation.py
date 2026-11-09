@@ -64,6 +64,12 @@ REMEDIATION: Dict[str, str] = {
         "the property. Below that version the platform answers `ExtraProperty`, "
         "a warning, and the setting is silently not applied."
     ),
+    "SCH012": (
+        "If you are checking an export, nothing is wrong with the app - "
+        "Quickbase's own export leaves this property out. If you are going to "
+        "deploy this document, add the property back first: the platform "
+        "refuses the node without it."
+    ),
     "SCH999": (
         "Read the message, which is authoritative. The finding could not be "
         "matched to a known code."
