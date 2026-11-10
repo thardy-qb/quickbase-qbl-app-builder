@@ -877,6 +877,7 @@ def _chart_properties(chart: ChartSpec, value_field: str,
             f"not support any of {sorted(UNCREATABLE_CHART_KINDS)}. "
             f"Use kind='{replacement}' instead."
         )
+    _require_chartable_series(chart)
     properties = _chart_body(chart, value_field, category_field, second_field,
                              category_kind)
     if chart.properties:
@@ -885,6 +886,32 @@ def _chart_properties(chart: ChartSpec, value_field: str,
         )
         _merge_properties(properties, chart.properties)
     return properties
+
+
+REFUSED_CHART_SUMMARIZE_BY = frozenset({"Count"})
+REFUSED_CHART_SOURCES = frozenset({"Record ID#", "Record ID"})
+
+COUNT_RECORDS_ON_A_CHART = (
+    "To count records, add a Numeric::Formula field whose formula is 1 "
+    "(hidden from forms, for example 'Row Counter'), then set "
+    "value_field to it and summarize_by='Sum'."
+)
+
+
+def _require_chartable_series(chart: ChartSpec) -> None:
+    if chart.summarize_by in REFUSED_CHART_SUMMARIZE_BY:
+        raise QBLCompileError(
+            f"chart '{chart.name}' summarizes by '{chart.summarize_by}', which a "
+            f"chart series refuses (a summary field takes Count; a chart does "
+            f"not). {COUNT_RECORDS_ON_A_CHART}"
+        )
+    for attr in ("value_field", "second_field"):
+        source = getattr(chart, attr)
+        if source in REFUSED_CHART_SOURCES:
+            raise QBLCompileError(
+                f"chart '{chart.name}' plots '{source}' as its {attr}, which a "
+                f"chart series refuses as a source. {COUNT_RECORDS_ON_A_CHART}"
+            )
 
 
 DEFAULT_SERIES_COLOR = "#005CF5"
