@@ -604,11 +604,16 @@ and the picture.
 
 - **`name`** — `str`, default required
 - **`value_field`** — `str`, default required
-  The field plotted on the value axis.
+  The field plotted on the value axis. Never `Record ID#`: a chart
+  series refuses it as a source. To count records, add a hidden
+  `Numeric::Formula` field whose formula is `1` and chart its `Sum`.
 - **`category_field`** — `Optional[str]`, default `None`
   The field the values are grouped by. Not used by gauges.
 - **`kind`** — `str`, default `'Bar'`
 - **`summarize_by`** — `str`, default `'Sum'`
+  How the series aggregates. `Sum` (the default), `Average`, `Minimum`,
+  `Maximum`, `DistinctCount` or `StdDeviation`. Not `Count`, which a
+  summary field takes and a chart series refuses with `BadProperty`.
 - **`second_field`** — `Optional[str]`, default `None`
   A second measure, for the kinds that plot one: a bubble's size, a
   variwide bar's width, a 3D scatter's X axis.

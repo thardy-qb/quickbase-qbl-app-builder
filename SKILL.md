@@ -62,6 +62,10 @@ it silently (see `references/requirements-and-decisions.md`).
 Edit `SPEC`. `references/spec-reference.md` lists every spec class, attribute
 and closed value set.
 
+To count records on a chart, add a hidden `Numeric::Formula` field whose
+formula is `1` and chart its `Sum`. A chart series refuses `Count` and a
+`Record ID#` source, though a summary field takes `Count`.
+
 Roles add to Quickbase's defaults; they never replace them. Every app keeps
 Viewer (read only), Participant (read, add, and edit the records they own) and
 Administrator (full access to every table, edits the app, manages users). The
