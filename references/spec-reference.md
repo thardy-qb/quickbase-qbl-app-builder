@@ -123,6 +123,19 @@ Three kinds need more than a label, and the builder supplies the rest:
   `Count` or `Total`. `Sum` is what every other tool calls it and the
   platform rejects it, so the spec takes the friendly word and the
   builder emits what Quickbase wants.
+- **`summarize_where`** — `Optional[str]`, default `None`
+  Only for a summary field: which child records it counts or totals, as
+  a Quickbase query. Omit to summarise every child record.
+
+  Name child fields with `[[fid:<child field>]]` tokens; they resolve on
+  the child table, not the table declaring the summary. Values are quoted:
+
+  summarize_where="{[[fid:Status]].EX.'Open'}OR{[[fid:Status]].EX.'In Progress'}"
+  summarize_where="{[[fid:Escalated]].EX.'1'}"   # a ticked checkbox
+
+  This is the filter "count only the open ones" needs. Prefer it to a
+  hidden flag field on the child: the filter is part of the summary, where
+  whoever reads it next will look.
 - **`unique`** — `bool`, default `False`
   Whether the field's values must be unique. Required of the key field a
   connected table refreshes on - the platform answers a non-unique one

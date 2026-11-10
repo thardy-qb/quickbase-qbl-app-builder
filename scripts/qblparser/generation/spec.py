@@ -23,6 +23,7 @@ class FieldSpec:
     summarize_table: Optional[str] = None
     summarize_field: Optional[str] = None
     summarize_by: str = "Count"
+    summarize_where: Optional[str] = None
     unique: bool = False
     required: bool = False
     help_text: Optional[str] = None

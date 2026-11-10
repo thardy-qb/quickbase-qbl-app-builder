@@ -66,6 +66,12 @@ To count records on a chart, add a hidden `Numeric::Formula` field whose
 formula is `1` and chart its `Sum`. A chart series refuses `Count` and a
 `Record ID#` source, though a summary field takes `Count`.
 
+To count or total only some child records ("count only open tickets"), give
+the summary field `summarize_where`, a Quickbase query naming child fields
+with `[[fid:...]]` tokens: `"{[[fid:Status]].EX.'Open'}OR{[[fid:Status]].EX.'In Progress'}"`.
+A summary can be filtered; don't hand the user a manual fix or add hidden
+flag fields for it.
+
 Roles add to Quickbase's defaults; they never replace them. Every app keeps
 Viewer (read only), Participant (read, add, and edit the records they own) and
 Administrator (full access to every table, edits the app, manages users). The

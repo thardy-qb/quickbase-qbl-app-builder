@@ -38,7 +38,7 @@ from qblparser.generation.spec import (
 from qblparser.qbl_schema.versioned import RENAMED_NESTED as _RENAMED_NESTED
 from qblparser.utils.qbl_tags import QBLTaggedMapping
 from qblparser.generation import code_pages as _code_pages
-from qblparser.generation.tokens import FieldTokenError, resolve_field_tokens
+from qblparser.generation.tokens import FIELD_TOKEN, FieldTokenError, resolve_field_tokens
 
 QBL_VERSION = 0.15
 
@@ -640,7 +640,32 @@ def _summary_field(spec: FieldSpec, parent: str, table_names: Dict[str, str],
         summary["FieldToSummarize"] = _ref(
             Table=table_names[child], Field=logical_id("Field", spec.summarize_field)
         )
+    if spec.summarize_where is not None:
+        summary["Query"] = _summary_query(spec, child)
     return summary
+
+
+_QUERY_CLAUSE = re.compile(
+    r"\{\s*'?(?:\[\[fid:[^\]]+\]\]|\d+)'?\s*\.\s*[A-Z]{2,4}\s*\.\s*'[^']*'\s*\}")
+
+
+def _summary_query(spec: FieldSpec, child: str) -> str:
+    query = (spec.summarize_where or "").strip()
+    if not query:
+        raise QBLCompileError(
+            f"summary field '{spec.label}' has an empty summarize_where; omit it "
+            f"to summarise every child record")
+    rest = _QUERY_CLAUSE.sub("", query)
+    rest = re.sub(r"\bAND\b|\bOR\b|[()\s]", "", rest)
+    if not _QUERY_CLAUSE.search(query) or rest:
+        raise QBLCompileError(
+            f"summary field '{spec.label}' has summarize_where {query!r}, which is "
+            f"not a Quickbase query: write clauses like "
+            f"{{[[fid:Status]].EX.'Open'}} joined with AND or OR")
+    query = re.sub(r"(?<!')(\[\[fid:[^\]]+\]\])(?!')", r"'\1'", query)
+    return FIELD_TOKEN.sub(
+        lambda m: m.group(0) if m.group(2) is not None
+        else f"[[fid:{child}|{m.group(1).strip()}]]", query)
 
 
 def _summary_display_type(app: AppSpec, table_name: str, field_label: str,
@@ -4039,6 +4064,10 @@ def _compile_table(table: TableSpec, spec: AppSpec, minter: _IdMinter,
             continue
 
         properties: Dict[str, Any] = {"Label": field_spec.label}
+        if field_spec.summarize_where is not None and field_spec.kind != "Summary":
+            raise QBLCompileError(
+                f"field '{field_spec.label}' has a summarize_where but its kind is "
+                f"'{field_spec.kind}'; only a Summary field filters what it summarises")
         if field_spec.kind == "Summary":
             properties["Summary"] = _summary_field(
                 field_spec, table.name, table_names, reference_fields, spec
