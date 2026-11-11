@@ -1,0 +1,25 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.DS_Store
+
+# What a build run writes. Specs and documents describe a real application,
+# so keep them out of the repository; the shipped examples are re-included below.
+/spec.py
+*.qbl.yaml
+*.qbl.yml
+*.build.json
+*.deployed.json
+qbl-submission.yaml
+qbl-submission.yaml.json
+
+# The cleanup ledger names apps created in your realm.
+qbl-cleanup.json
+qbl-cleanup.json.lock
+
+# Saved platform responses and review digests.
+/resp.json
+*-response.json
+/app.md
+
+!examples/**
