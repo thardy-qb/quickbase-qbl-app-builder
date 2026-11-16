@@ -26,18 +26,17 @@ For a security problem, do not open an issue. See [SECURITY.md](SECURITY.md).
 
 5. Open the pull request against `main`.
 
-## How changes are released
+## Review and merging
 
-This repository is the published form of each release, so `main` only changes
-when a version is released. A change you propose is reviewed here. If it is
-accepted, the maintainer brings it into the next release, and the pull request
-is closed with a link to the release that carries it, rather than merged
-directly. Your contribution is credited in that release's notes.
+Every pull request is reviewed by the maintainer, who merges it into `main`
+with a squash merge once it is ready. Releases are cut from `main` and
+published on the Releases page; a merged change ships in the next release.
 
 Changes that may take longer to review, or be declined:
 
-- changes to the files under `scripts/qblparser/` that are only formatting or
-  comments, which are not kept between releases;
+- comments or docstrings added to the code under `scripts/qblparser/`, which
+  is kept free of them; put the explanation in the pull request description
+  instead;
 - new third-party dependencies (the Skill runs on the standard library plus the
   packages bundled under `scripts/vendor/`);
 - anything that sends data anywhere other than the Quickbase realm the user
